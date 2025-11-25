@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title SolarTokenV1
  * @author NIKO-SUN
  */
 contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
-
     // ============ ROLES ============
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -24,20 +23,20 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @notice Proyecto solar tokenizado
      */
     struct Project {
-        uint96 totalSupply;      // Total de tokens del proyecto
-        uint96 minted;           // Tokens ya minteados
-        uint64 priceWei;         // Precio por token en wei
-        bool active;             // Estado activo/inactivo
-        uint64 createdAt;        // Timestamp de creación
+        uint96 totalSupply; // Total de tokens del proyecto
+        uint96 minted; // Tokens ya minteados
+        uint64 priceWei; // Precio por token en wei
+        bool active; // Estado activo/inactivo
+        uint64 createdAt; // Timestamp de creación
     }
 
     /**
      * @notice Métricas agregadas del proyecto
      */
     struct Metrics {
-        uint128 totalEnergyKwh;  // Energía acumulada (kWh * 10^4 para decimales)
+        uint128 totalEnergyKwh; // Energía acumulada (kWh * 10^4 para decimales)
         uint128 totalDistributed; // Total distribuido en wei
-        uint64 lastUpdate;       // Timestamp última actualización
+        uint64 lastUpdate; // Timestamp última actualización
     }
 
     // ============ STORAGE ============
@@ -119,18 +118,13 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @param projectId ID del proyecto
      * @param active Nuevo estado
      */
-    event ProjectStatusChanged(
-        uint256 indexed projectId,
-        bool active
-    );
+    event ProjectStatusChanged(uint256 indexed projectId, bool active);
 
     /**
      * @notice Emitido cuando se actualiza el base URI
      * @param newBaseURI Nueva URI base
      */
-    event BaseURIUpdated(
-        string newBaseURI
-    );
+    event BaseURIUpdated(string newBaseURI);
 
     // ============ CUSTOM ERRORS (GAS OPTIMIZATION) ============
 
@@ -196,7 +190,12 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
             createdAt: uint64(block.timestamp)
         });
 
-        emit ProjectCreated(projectId, totalSupply, priceWei, uint64(block.timestamp));
+        emit ProjectCreated(
+            projectId,
+            totalSupply,
+            priceWei,
+            uint64(block.timestamp)
+        );
         return projectId;
     }
 
@@ -280,10 +279,9 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @dev Útil para migrar de backend a IPFS, o viceversa
      *
      */
-    function setBaseURI(string calldata newBaseURI)
-        external
-        onlyRole(ADMIN_ROLE)
-    {
+    function setBaseURI(
+        string calldata newBaseURI
+    ) external onlyRole(ADMIN_ROLE) {
         baseURI = newBaseURI;
         emit BaseURIUpdated(newBaseURI);
     }
@@ -385,11 +383,9 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @param projectId ID del proyecto
      * @return project Struct Project completo
      */
-    function getProject(uint256 projectId)
-        external
-        view
-        returns (Project memory)
-    {
+    function getProject(
+        uint256 projectId
+    ) external view returns (Project memory) {
         return projects[projectId];
     }
 
@@ -398,11 +394,9 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @param projectId ID del proyecto
      * @return metrics Struct Metrics completo
      */
-    function getMetrics(uint256 projectId)
-        external
-        view
-        returns (Metrics memory)
-    {
+    function getMetrics(
+        uint256 projectId
+    ) external view returns (Metrics memory) {
         return metrics[projectId];
     }
 
@@ -411,11 +405,7 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @param projectId ID del proyecto
      * @return available Cantidad de tokens disponibles
      */
-    function availableTokens(uint256 projectId)
-        external
-        view
-        returns (uint96)
-    {
+    function availableTokens(uint256 projectId) external view returns (uint96) {
         Project memory project = projects[projectId];
         return project.totalSupply - project.minted;
     }
@@ -425,11 +415,7 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @param projectId ID del proyecto
      * @return exists True si el proyecto existe
      */
-    function projectExists(uint256 projectId)
-        external
-        view
-        returns (bool)
-    {
+    function projectExists(uint256 projectId) external view returns (bool) {
         return projects[projectId].totalSupply > 0;
     }
 
@@ -437,11 +423,7 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @notice Obtener el siguiente ID de proyecto que será creado
      * @return nextId Próximo ID de proyecto
      */
-    function nextProjectId()
-        external
-        view
-        returns (uint256)
-    {
+    function nextProjectId() external view returns (uint256) {
         return _nextProjectId;
     }
 
@@ -456,18 +438,12 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      *      - IPFS: "ipfs://QmHash/" → "ipfs://QmHash/1"
      *      - Gateway: "https://gateway.ipfs.io/ipfs/QmHash/" → "https://gateway.ipfs.io/ipfs/QmHash/1"
      */
-    function uri(uint256 projectId)
-        public
-        view
-        override
-        returns (string memory)
-    {
+    function uri(
+        uint256 projectId
+    ) public view override returns (string memory) {
         if (projects[projectId].totalSupply == 0) revert InvalidProject();
 
-        return string(abi.encodePacked(
-            baseURI,
-            _toString(projectId)
-        ));
+        return string(abi.encodePacked(baseURI, _toString(projectId)));
     }
 
     // ============ EMERGENCY FUNCTIONS ============
@@ -504,11 +480,9 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @notice Retirar fondos a una dirección específica
      * @param recipient Dirección de destino
      */
-    function withdrawTo(address payable recipient)
-        external
-        onlyRole(ADMIN_ROLE)
-        nonReentrant
-    {
+    function withdrawTo(
+        address payable recipient
+    ) external onlyRole(ADMIN_ROLE) nonReentrant {
         if (recipient == address(0)) revert Unauthorized();
 
         uint256 balance = address(this).balance;
@@ -524,11 +498,9 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
      * @notice Convertir array de uint96 a uint256
      * @dev Necesario para _mintBatch que espera uint256[]
      */
-    function _toUint256Array(uint96[] calldata input)
-        private
-        pure
-        returns (uint256[] memory)
-    {
+    function _toUint256Array(
+        uint96[] calldata input
+    ) private pure returns (uint256[] memory) {
         uint256[] memory output = new uint256[](input.length);
         for (uint256 i = 0; i < input.length; i++) {
             output[i] = input[i];
@@ -564,12 +536,9 @@ contract SolarTokenV1 is ERC1155, AccessControl, Pausable, ReentrancyGuard {
     /**
      * @notice Override requerido para múltiple herencia
      */
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC1155, AccessControl)
-        returns (bool)
-    {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view override(ERC1155, AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
