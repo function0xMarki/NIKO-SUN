@@ -10,11 +10,11 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 /**
  * @title SolarTokenV3Optimized
  * @author NIKO-SUN
- * @notice Versión optimizada para tamaño de contrato (<24KB).
- * @dev SEGURIDAD - Recomendaciones para producción:
- * - Considerar usar TimelockController de OpenZeppelin para cambios administrativos
- * - El owner puede pausar el contrato y rescatar dust sin timelock
- * - Para máxima seguridad, transferir ownership a un contrato Timelock o Multisig
+ * @notice Sistema de tokenización de proyectos solares con distribución proporcional de ingresos
+ * @dev Implementa ERC-1155 para múltiples proyectos en un solo contrato
+ * @dev Características: compra de tokens, rewards proporcionales, transferencias, paginación
+ * @dev SEGURIDAD: ReentrancyGuard, Pausable, validaciones exhaustivas
+ * @dev Recomendaciones para producción:
  */
 contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
     using Strings for uint256;
@@ -22,7 +22,6 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
     // ========================================
     // CONSTANTES
     // ========================================
-    // Eliminados los roles bytes32 para ahorrar espacio y gas
 
     uint256 private constant PRECISION = 1e18;
 
@@ -35,11 +34,11 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         uint96 totalSupply;
         uint96 minted;
         uint96 minPurchase;
-        uint128 priceWei; // Cambiado de uint64 para soportar precios > 18 ETH
+        uint128 priceWei; 
         uint64 createdAt;
         bool active;
         uint128 totalEnergyKwh;
-        uint48 reserved1; // Reducido de uint56 para compensar el aumento de priceWei
+        uint48 reserved1; 
         uint128 totalRevenue;
         uint128 reserved2;
         uint256 rewardPerTokenStored;
@@ -209,13 +208,27 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
     // CONSTRUCTOR & ADMIN
     // ========================================
 
-    // Inicializamos Ownable con el msg.sender
+    /**
+     * @notice Inicializa el contrato SolarToken con ERC1155
+     * @dev Establece el deployer como owner inicial
+     */
     constructor() ERC1155("") Ownable(msg.sender) {}
 
+    /**
+     * @notice Establece la URI base para los metadatos de los proyectos
+     * @dev Solo puede ser llamado por el owner del contrato
+     * @param newBaseURI Nueva URI base (ej: "https://api.example.com/metadata/")
+     */
     function setBaseURI(string memory newBaseURI) external onlyOwner {
         _baseMetadataURI = newBaseURI;
     }
 
+    /**
+     * @notice Retorna la URI completa del metadata para un proyecto
+     * @dev Concatena baseURI + projectId + ".json"
+     * @param projectId ID del proyecto
+     * @return URI completa del metadata
+     */
     function uri(
         uint256 projectId
     ) public view override returns (string memory) {
@@ -233,6 +246,15 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
     // CREACIÓN DE PROYECTOS
     // ========================================
 
+    /**
+     * @notice Crea un nuevo proyecto solar
+     * @dev El msg.sender se convierte en el creator del proyecto
+     * @param name Nombre del proyecto
+     * @param totalSupply Cantidad total de tokens disponibles
+     * @param priceWei Precio por token en wei
+     * @param minPurchase Cantidad mínima de tokens por compra
+     * @return projectId ID del proyecto creado
+     */
     function createProject(
         string calldata name,
         uint96 totalSupply,
@@ -248,7 +270,16 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         );
     }
 
-    // Cambiado onlyRole(ADMIN_ROLE) por onlyOwner
+    /**
+     * @notice Crea un proyecto en nombre de otro usuario (solo owner)
+     * @dev Permite al admin crear proyectos para otros usuarios
+     * @param creator Dirección que será el creator del proyecto
+     * @param name Nombre del proyecto
+     * @param totalSupply Cantidad total de tokens disponibles
+     * @param priceWei Precio por token en wei
+     * @param minPurchase Cantidad mínima de tokens por compra
+     * @return projectId ID del proyecto creado
+     */
     function createProjectFor(
         address creator,
         string calldata name,
@@ -266,7 +297,10 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         );
     }
 
-    // Lógica interna para evitar duplicación de código y reducir tamaño
+    /**
+     * @dev Lógica interna compartida para crear proyectos
+     * @dev Valida parámetros, crea el proyecto y emite evento
+     */
     function _createProjectLogic(
         address creator,
         string calldata name,
@@ -312,6 +346,12 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         );
     }
 
+    /**
+     * @notice Transfiere la propiedad de un proyecto a otro usuario
+     * @dev Solo puede ser llamado por el creator actual del proyecto
+     * @param projectId ID del proyecto
+     * @param newCreator Nueva dirección que será el creator
+     */
     function transferProjectOwnership(
         uint256 projectId,
         address newCreator
@@ -351,6 +391,12 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Activa o desactiva un proyecto
+     * @dev Solo el creator puede cambiar el estado. Proyectos inactivos no aceptan compras ni deposits
+     * @param projectId ID del proyecto
+     * @param active true para activar, false para desactivar
+     */
     function setProjectStatus(
         uint256 projectId,
         bool active
@@ -364,6 +410,12 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
     // PÚBLICO: COMPRA DE TOKENS
     // ========================================
 
+    /**
+     * @notice Compra tokens de un proyecto
+     * @dev Requiere enviar ETH suficiente. Devuelve el exceso automáticamente
+     * @param projectId ID del proyecto
+     * @param amount Cantidad de tokens a comprar
+     */
     function mint(
         uint256 projectId,
         uint96 amount
@@ -378,9 +430,6 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
 
         uint256 totalPrice = uint256(project.priceWei) * uint256(amount);
         if (msg.value < totalPrice) revert InsufficientPayment();
-
-        // NOTA: _updateRewards se llama automáticamente en _update() durante _mint()
-        // No es necesario llamarlo manualmente aquí (optimización de gas)
 
         project.minted += amount;
         projectSalesBalance[projectId] += totalPrice;
@@ -443,6 +492,12 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         );
     }
 
+    /**
+     * @notice Incrementa la energía total generada por el proyecto
+     * @dev Solo creator o admin. La energía se acumula (no se sobrescribe)
+     * @param projectId ID del proyecto
+     * @param energyKwhDelta Incremento de energía en kWh
+     */
     function updateEnergy(
         uint256 projectId,
         uint128 energyKwhDelta
@@ -485,6 +540,13 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         );
     }
 
+    /**
+     * @notice Retira fondos de ventas del proyecto
+     * @dev Solo el creator puede retirar. Fondos provienen de compras de tokens
+     * @param projectId ID del proyecto
+     * @param recipient Dirección que recibirá los fondos
+     * @param amount Cantidad de ETH a retirar en wei
+     */
     function withdrawSales(
         uint256 projectId,
         address recipient,
@@ -508,6 +570,11 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         );
     }
 
+    /**
+     * @dev Actualiza los rewards pendientes de un inversor antes de transferencias
+     * @param projectId ID del proyecto
+     * @param investor Dirección del inversor
+     */
     function _updateRewards(uint256 projectId, address investor) internal {
         Project storage project = projects[projectId];
         uint256 balance = balanceOf(investor, projectId);
@@ -523,6 +590,13 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
             .rewardPerTokenStored;
     }
 
+    /**
+     * @notice Calcula el monto total de rewards reclamables por un inversor
+     * @dev Incluye rewards pendientes + rewards no actualizados
+     * @param projectId ID del proyecto
+     * @param investor Dirección del inversor
+     * @return claimable Cantidad de ETH reclamable en wei
+     */
     function getClaimableAmount(
         uint256 projectId,
         address investor
@@ -570,7 +644,11 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         if (!success) revert ClaimTransferFailed();
     }
 
-    // Helper para reducir duplicación en claims
+    /**
+     * @dev Helper interno para claim de un solo proyecto con transferencia
+     * @param projectId ID del proyecto
+     * @param user Dirección del usuario
+     */
     function _claimRevenueLogic(uint256 projectId, address user) internal {
         uint256 claimable = _claimRevenueLogicInternal(projectId, user);
         if (claimable == 0) revert NothingToClaim();
@@ -579,6 +657,12 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         if (!success) revert ClaimTransferFailed();
     }
 
+    /**
+     * @dev Lógica interna de claim que actualiza estado y retorna monto
+     * @param projectId ID del proyecto
+     * @param user Dirección del usuario
+     * @return Monto reclamado en wei
+     */
     function _claimRevenueLogicInternal(
         uint256 projectId,
         address user
@@ -604,6 +688,14 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
     // VIEW FUNCTIONS & ADMIN
     // ========================================
 
+    /**
+     * @notice Obtiene información completa de un proyecto
+     * @param projectId ID del proyecto
+     * @return project Datos del proyecto
+     * @return meta Metadata del proyecto (nombre)
+     * @return salesBalance Balance de ventas pendiente de retiro
+     * @return availableSupply Tokens disponibles para compra
+     */
     function getProject(
         uint256 projectId
     )
@@ -622,12 +714,23 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         availableSupply = project.totalSupply - project.minted;
     }
 
+    /**
+     * @notice Retorna el creator de un proyecto
+     * @param projectId ID del proyecto
+     * @return Dirección del creator
+     */
     function getProjectCreator(
         uint256 projectId
     ) external view returns (address) {
         return projects[projectId].creator;
     }
 
+    /**
+     * @notice Verifica si una dirección es el creator del proyecto
+     * @param projectId ID del proyecto
+     * @param account Dirección a verificar
+     * @return true si es el creator, false en caso contrario
+     */
     function isProjectCreator(
         uint256 projectId,
         address account
@@ -716,16 +819,29 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         hasMore = end < total;
     }
 
+    /**
+     * @notice Retorna el balance de ventas de un proyecto
+     * @param projectId ID del proyecto
+     * @return Balance disponible para retiro por el creator en wei
+     */
     function getSalesBalance(
         uint256 projectId
     ) external view returns (uint256) {
         return projectSalesBalance[projectId];
     }
 
+    /**
+     * @notice Retorna el balance total de ETH del contrato
+     * @return Balance total del contrato en wei
+     */
     function getTotalBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
+    /**
+     * @notice Retorna el próximo ID de proyecto a crear
+     * @return ID que tendrá el próximo proyecto creado
+     */
     function nextProjectId() external view returns (uint256) {
         return _nextProjectId;
     }
@@ -797,11 +913,18 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         hasMore = end < total;
     }
 
-    // Funciones de pausa (ahora usan onlyOwner)
+    /**
+     * @notice Pausa el contrato (solo owner)
+     * @dev Bloquea mint y transferTokens. Los claims siguen funcionando
+     */
     function pause() external onlyOwner {
         _pause();
     }
 
+    /**
+     * @notice Despausa el contrato (solo owner)
+     * @dev Reactiva las funciones bloqueadas por pause
+     */
     function unpause() external onlyOwner {
         _unpause();
     }
@@ -879,6 +1002,14 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
     // OVERRIDES
     // ========================================
 
+    /**
+     * @dev Hook interno de ERC1155 que se ejecuta en todas las transferencias
+     * @dev Actualiza los rewards pendientes antes de modificar balances
+     * @param from Dirección origen (address(0) en mint)
+     * @param to Dirección destino (address(0) en burn)
+     * @param ids Array de IDs de proyectos
+     * @param values Array de cantidades correspondientes
+     */
     function _update(
         address from,
         address to,
@@ -898,11 +1029,21 @@ contract SolarTokenV3Optimized is ERC1155, Ownable, Pausable, ReentrancyGuard {
         super._update(from, to, ids, values);
     }
 
+    /**
+     * @notice Verifica si el contrato soporta una interfaz específica
+     * @dev Implementa ERC-165 para detección de interfaces
+     * @param interfaceId ID de la interfaz a verificar
+     * @return true si la interfaz es soportada
+     */
     function supportsInterface(
         bytes4 interfaceId
     ) public view override(ERC1155) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
+    /**
+     * @notice Permite al contrato recibir ETH directamente
+     * @dev ETH enviado directamente queda como dust (recuperable con rescueDust)
+     */
     receive() external payable {}
 }
