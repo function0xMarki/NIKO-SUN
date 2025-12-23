@@ -27,7 +27,7 @@ contract NiKoSun is ERC1155, Ownable, Pausable, ReentrancyGuard {
 
     // Logo IPFS para todos los tokens del proyecto
     string private constant LOGO_IPFS =
-        "https://cyan-acceptable-echidna-172.mypinata.cloud/ipfs/bafkreihcpqm4pxw7unbejavgmhbofoxqsndnhn54segnufl7vcwm6fdwjy";
+        "https://ipfs.io/ipfs/bafkreihcpqm4pxw7unbejavgmhbofoxqsndnhn54segnufl7vcwm6fdwjy";
 
     // ========================================
     // ESTRUCTURAS
@@ -240,7 +240,7 @@ contract NiKoSun is ERC1155, Ownable, Pausable, ReentrancyGuard {
         if (projects[projectId].creator == address(0)) revert ProjectNotFound();
 
         string memory projectName = metadata[projectId].name;
-        
+
         // Nombre del token simplificado
         string memory tokenName = bytes(projectName).length > 0
             ? string(abi.encodePacked(projectName, " #", projectId.toString()))
@@ -253,6 +253,8 @@ contract NiKoSun is ERC1155, Ownable, Pausable, ReentrancyGuard {
                 tokenName,
                 '","description":"Solar energy investment token. Powered by NiKoSun.","image":"',
                 LOGO_IPFS,
+                '","image_url":"',
+                LOGO_IPFS,
                 '"}'
             )
         );
@@ -264,6 +266,24 @@ contract NiKoSun is ERC1155, Ownable, Pausable, ReentrancyGuard {
                     Base64.encode(bytes(json))
                 )
             );
+    }
+
+    /**
+     * @notice Retorna el nombre del contrato ERC-1155
+     * @dev Metadata a nivel de contrato
+     * @return Nombre del contrato
+     */
+    function name() public pure returns (string memory) {
+        return "NiKoSun Token";
+    }
+
+    /**
+     * @notice Retorna el símbolo del contrato
+     * @dev Metadata a nivel de contrato
+     * @return Símbolo del contrato
+     */
+    function symbol() public pure returns (string memory) {
+        return "NIKO";
     }
 
     // ========================================
